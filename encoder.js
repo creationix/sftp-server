@@ -26,11 +26,10 @@ function encode(type, args) {
         length += 32;
         break;
       case "PAIRS":
-        var keys = Object.keys(args[i]);
-        for (var j = 0, ll = keys.length; j < ll; j++) {
-          var key = keys[j];
-          length += 8 + key.length + value[key].length;
-        }
+        length += measurePairs(args[i]);
+        break;
+      case "NAMES":
+        length += measureNames(args[i]);
         break;
       default: throw new Error("Unknown type " + Util.inspect(format[i]));
     }
@@ -61,11 +60,33 @@ function encode(type, args) {
       case "PAIRS":
         offset += writePairs(buffer, offset, value);
         break;
+      case "NAMES":
+        offset += writeNames(buffer, offset, value);
+        break;
       default: throw new Error("Unknown type " + Util.inspect(format[i]));
     }
   }
   
   return buffer;
+}
+
+function measureNames(names) {
+  var length = 4;
+  for (var i = 0, l = names.length; i < l; i++) {
+    var item = names[i];
+    length += item.filename.length + item.longname.length + 40;
+  }
+  return length;
+}
+
+function measurePairs(pairs) {
+  var length = 0;
+  var keys = Object.keys(pairs);
+  for (var i = 0, l = keys.length; i < l; i++) {
+    var key = keys[i];
+    length += 8 + key.length + pairs[key].length;
+  }
+  return length;
 }
 
 
@@ -84,9 +105,11 @@ function writeInt64(buffer, offset, value) {
   return 8;
 }
 function writeString(buffer, offset, string) {
+  if (typeof string !== 'string') { console.dir(arguments); throw new Error("writeString requires a string input"); }
+  string = string + "";
   var length = string.length;
   writeInt32(buffer, offset, length);
-  buffer.write(string, "ascii", offset + 4, string);
+  buffer.write(string, "ascii", offset + 4);
   return length + 4;
 }
 function writeAttrs(buffer, offset, attrs) {
@@ -94,9 +117,9 @@ function writeAttrs(buffer, offset, attrs) {
   writeInt64(buffer, offset + 4, attrs.size); // present only if flag ATTR_SIZE
   writeInt32(buffer, offset + 12, attrs.uid); // present only if flag ATTR_UIDGID
   writeInt32(buffer, offset + 16, attrs.gid); // present only if flag ATTR_UIDGID
-  writeInt32(buffer, offset + 20, attrs.permissions); // present only if flag ATTR_PERMISSIONS
-  writeInt32(buffer, offset + 24, attrs.atime); // present only if flag ACMODTIME
-  writeInt32(buffer, offset + 28, attrs.mtime); // present only if flag ACMODTIME
+  writeInt32(buffer, offset + 20, attrs.mode); // present only if flag ATTR_PERMISSIONS
+  writeInt32(buffer, offset + 24, attrs.atime.getTime() / 1000); // present only if flag ACMODTIME
+  writeInt32(buffer, offset + 28, attrs.mtime.getTime() / 1000); // present only if flag ACMODTIME
   return 32;
 }  
 function writePairs(buffer, offset, pairs) {
@@ -106,6 +129,18 @@ function writePairs(buffer, offset, pairs) {
     var key = keys[i];
     offset += writeString(buffer, offset, key);
     offset += writeString(buffer, offset, pairs[key]);
+  }
+  return offset - start;
+}
+function writeNames(buffer, offset, names) {
+  var start = offset;
+  var length = names.length;
+  offset += writeInt32(buffer, offset, length);
+  for (var i = 0; i < length; i++) {
+    var item = names[i];
+    offset += writeString(buffer, offset, item.filename);
+    offset += writeString(buffer, offset, item.longname);
+    offset += writeAttrs(buffer, offset, item.attrs);
   }
   return offset - start;
 }
