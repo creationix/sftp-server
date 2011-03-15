@@ -185,15 +185,14 @@ var Handlers = {
       self.send(FXP_HANDLE, id, handle);
     });
   },
-  READ: function (id, handle, offset, len) {
+  READ: function (id, handle, pos, len) {
     if (!handles.hasOwnProperty(handle)) { throw new Error("Invalid Handle"); }
     var self = this;
     var fd = handles[handle];
-    var pos = 0;
+    var offset = 0;
     var buffer;
     Fs.fstat(fd, function (err, stat) {
       if (err) { self.error(id, err); return; }
-      console.dir(stat);
       if (stat.size < len) { len = stat.size; }
       buffer = new Buffer(len);
       if (len > 0) {
@@ -203,13 +202,11 @@ var Handlers = {
       }
     });
     function getData() {
-      console.dir({fd:fd,buffer:buffer,offset:offset,len:len,pos:pos});
       Fs.read(fd, buffer, offset, len, pos, onRead);
     }
     function onRead(err, bytesRead) {
       if (err) { self.error(id, err); return; }
       if (bytesRead < len) {
-        console.log("Regrouping for more");
         offset += bytesRead;
         pos += bytesRead;
         len -= bytesRead;
@@ -254,15 +251,14 @@ var Handlers = {
       self.status(id, FX_OK, "Success");
     });
   },
-  WRITE: function (id, handle, offset, data) {
+  WRITE: function (id, handle, pos, data) {
     if (!handles.hasOwnProperty(handle)) { throw new Error("Invalid Handle"); }
     var self = this;
     var fd = handles[handle];
-    var pos = 0;
+    var offset = 0;
     var left = data.length;
     writeChunk();
     function writeChunk() {
-      console.dir([fd, data, offset, left, pos]);
       Fs.write(fd, data, offset, left, pos, onWrite);
     }
     function onWrite(err, bytesWritten) {
