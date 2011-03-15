@@ -226,12 +226,12 @@ var Handlers = {
     var self = this;
     Fs.unlink(path, function (err) {
       if (err) { self.error(id, err); return; }
-      self.status(FX_OK, id, "Success");
+      self.status(id, FX_OK, "Success");
     });
   },
   SETSTAT: function (id, path, attrs) {
     console.log("WARNING, node.js doesn't have SETSTAT");
-    this.status(FX_OK, id, "Success");
+    this.status(id, FX_OK, "Success");
   },
   MKDIR: function (id, path, attrs) {
     var self = this;
