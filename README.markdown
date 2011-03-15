@@ -18,9 +18,10 @@ Then in another terminal, try to mount it using `sshfs`.
 
 Then from there explore your new nodeJS powered filesystem.  If you hit a part of the protocol I haven't fully implemented, your sshfs client will lock hard.
 
-To recover from a lock, force an umount in another tab.
+To recover from a lock, kill sshfs and umount
 
+    killall -9 sshfs
     sudo umount /media/nodejs -l
 
-Then force quit whatever process got hung by the stuck sshfs.
+The `killall` will free up your processes that got blocked by sshfs.
 

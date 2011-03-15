@@ -59,12 +59,12 @@ function real(client) {
     client.write(chunk);
   });
   createParser(output, function (type, args) {
-    console.log("OUT " + FXP_LOOKUP[type] + " " + Util.inspect(args, false, 3));
-//    console.log("OUT " + FXP_LOOKUP[type]);
+//    console.log("OUT " + FXP_LOOKUP[type] + " " + Util.inspect(args, false, 3));
+    console.log("OUT " + FXP_LOOKUP[type]);
   });
   createParser(client, function (type, args) {
-    console.log("IN  " + FXP_LOOKUP[type] + " " + Util.inspect(args, false, 3));
-//    console.log("IN  " + FXP_LOOKUP[type]);
+//    console.log("IN  " + FXP_LOOKUP[type] + " " + Util.inspect(args, false, 3));
+    console.log("IN  " + FXP_LOOKUP[type]);
     var typeName = FXP_LOOKUP[type];
     if (!Handlers.hasOwnProperty(typeName)) {
       throw new Error("Unknown type " + typeName);
@@ -217,8 +217,11 @@ var Handlers = {
     });
   },
   SETSTAT: function (id, path, attrs) {
-    console.log("WARNING, node.js doesn't have SETSTAT");
-    this.status(id, FX_OK, "Success");
+    var self = this;
+    Fs.chmod(path, attrs.permissions, function (err) {
+      if (err) { self.error(id, err); return; }
+      self.status(id, FX_OK, "Success");
+    });
   },
   MKDIR: function (id, path, attrs) {
     var self = this;
