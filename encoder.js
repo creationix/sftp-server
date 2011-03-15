@@ -20,6 +20,7 @@ function encode(type, args) {
         length += 4;
         break;
       case "string":
+      case "buffer":
         length += args[i].length + 4;
         break;
       case "ATTRS":
@@ -53,6 +54,9 @@ function encode(type, args) {
         break;
       case "string":
         offset += writeString(buffer, offset, value);
+        break;
+      case "buffer":
+        offset += writeBuffer(buffer, offset, value);
         break;
       case "ATTRS":
         offset += writeAttrs(buffer, offset, value);
@@ -111,10 +115,15 @@ function writeInt64(buffer, offset, value) {
 }
 function writeString(buffer, offset, string) {
   if (typeof string !== 'string') { console.dir(arguments); throw new Error("writeString requires a string input"); }
-  string = string + "";
   var length = string.length;
   writeInt32(buffer, offset, length);
   buffer.write(string, "ascii", offset + 4);
+  return length + 4;
+}
+function writeBuffer(buffer, offset, chunk) {
+  var length = chunk.length;
+  writeInt32(buffer, offset, length);
+  chunk.copy(buffer, offset + 4);
   return length + 4;
 }
 function writeAttrs(buffer, offset, attrs) {

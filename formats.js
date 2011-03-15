@@ -21,9 +21,9 @@ module.exports = {
   SYMLINK: ["uint32", "string", "string"],
   STATUS: ["uint32", "uint32", "string", "string"],
   HANDLE: ["uint32", "string"],
-  DATA: ["uint32", "string"],
+  DATA: ["uint32", "buffer"],
   NAME: ["uint32", "NAMES"],
   ATTRS: ["uint32", "ATTRS"],
-//  EXTENDED: [TODO],
-//  EXTENDED_REPLY: [TODO]
+  EXTENDED: ["uint32", "string"],
+  EXTENDED_REPLY: ["uint32"]
 };

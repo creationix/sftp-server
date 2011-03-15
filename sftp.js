@@ -1,5 +1,6 @@
 var Net = require('net'),
     ChildProcess = require('child_process'),
+    Constants = require('constants'),
     Util = require('util'),
     Fs = require('fs'),
     EventEmitter = require('events').EventEmitter,
@@ -90,6 +91,14 @@ var Handlers = {
       else { self.send(FXP_ATTRS, id, stat); }
     });
   },
+  FSTAT: function (id, handle) {
+    var fd = handles[handle];
+    var self = this;
+    Fs.fstat(fd, function (err, stat) {
+      if (err) { self.error(id, err); }
+      else { self.send(FXP_ATTRS, id, stat); }
+    });
+  },
   OPENDIR: function (id, path) {
     var handle = getHandle(path);
     this.send(FXP_HANDLE, id, handle);
@@ -130,15 +139,80 @@ var Handlers = {
   READLINK: function (id, path) {
     var self = this;
     Fs.readlink(path, function (err, resolvedPath) {
-      if (err) { self.error(err); return; }
+      if (err) { self.error(id, err); return; }
       self.send(FXP_NAME, id, [{
         filename: resolvedPath,
         longname: resolvedPath,
         attrs: {}
       }]);
     });
+  },
+  OPEN: function (id, path, pflags, attrs) {
+    var self = this;
+    var flags = 
+      ((pflags & FXF_READ) ? Constants.O_RDONLY : 0) |
+      ((pflags & FXF_WRITE) ? Constants.O_WRONLY : 0) |
+      ((pflags & FXF_APPEND) ? Constants.O_APPEND : 0) |
+      ((pflags & FXF_CREAT) ? Constants.O_CREAT : 0) |
+      ((pflags & FXF_TRUNC) ? Constants.O_TRUNC : 0) |
+      ((pflags & FXF_EXCL) ? Constants.O_EXCL : 0);
+    Fs.open(path, flags, attrs.permissions, function (err, fd) {
+      if (err) { self.error(id, err); return; }
+      var handle = getHandle(fd);
+      self.send(FXP_HANDLE, id, handle);
+    });
+  },
+  READ: function (id, handle, offset, len) {
+    if (!handles.hasOwnProperty(handle)) { throw new Error("Invalid Handle"); }
+    var self = this;
+    var fd = handles[handle];
+    var pos = 0;
+    var buffer;
+    Fs.fstat(fd, function (err, stat) {
+      if (err) { self.error(id, err); return; }
+      console.dir(stat);
+      if (stat.size < len) { len = stat.size; }
+      buffer = new Buffer(len);
+      if (len > 0) {
+        getData();
+      } else {
+        done();
+      }
+    });
+    function getData() {
+      console.dir({fd:fd,buffer:buffer,offset:offset,len:len,pos:pos});
+      Fs.read(fd, buffer, offset, len, pos, onRead);
+    }
+    function onRead(err, bytesRead) {
+      if (err) { self.error(id, err); return; }
+      if (bytesRead < len) {
+        console.log("Regrouping for more");
+        offset += bytesRead;
+        pos += bytesRead;
+        len -= bytesRead;
+        getData();
+        return;
+      }
+      done();
+    }
+    function done() {
+      self.send(FXP_DATA, id, buffer);
+    }
+  },
+  REMOVE: function (id, path) {
+    var self = this;
+    Fs.unlink(path, function (err) {
+      if (err) { self.error(id, err); return; }
+      self.status(FX_OK, id, "Success");
+    });
+  },
+  SETSTAT: function (id, path, attrs) {
+    console.log("WARNING, node.js doesn't have SETSTAT");
+    this.status(FX_OK, id, "Success");
   }
 };
+
+
 var handles = [];
 function getHandle(path) {
   var i = 0;
@@ -151,7 +225,7 @@ function getHandle(path) {
 
 
 
-Net.createServer(real).listen(6000);
+Net.createServer(proxy).listen(6000);
 console.log("sftp-server listening on port 6000");
 
 
