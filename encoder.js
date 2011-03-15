@@ -23,7 +23,7 @@ function encode(type, args) {
         length += args[i].length + 4;
         break;
       case "ATTRS":
-        length += 32;
+        length += measureAttrs(args[1]);
         break;
       case "PAIRS":
         length += measurePairs(args[i]);
@@ -70,11 +70,16 @@ function encode(type, args) {
   return buffer;
 }
 
+function measureAttrs(attrs) {
+ if (Object.keys(attrs).length) { return 32; }
+ return 4;
+}
+
 function measureNames(names) {
   var length = 4;
   for (var i = 0, l = names.length; i < l; i++) {
     var item = names[i];
-    length += item.filename.length + item.longname.length + 40;
+    length += item.filename.length + item.longname.length + 8 + measureAttrs(item.attrs);
   }
   return length;
 }
@@ -113,6 +118,10 @@ function writeString(buffer, offset, string) {
   return length + 4;
 }
 function writeAttrs(buffer, offset, attrs) {
+  if (!Object.keys(attrs).length) {
+    writeInt32(buffer, offset, 0); // ATTR_SIZE | ATTR_UIDGID | ATTR_PERMISSIONS | ACMODTIME);
+    return 4; 
+  }
   writeInt32(buffer, offset, 15); // ATTR_SIZE | ATTR_UIDGID | ATTR_PERMISSIONS | ACMODTIME);
   writeInt64(buffer, offset + 4, attrs.size); // present only if flag ATTR_SIZE
   writeInt32(buffer, offset + 12, attrs.uid); // present only if flag ATTR_UIDGID

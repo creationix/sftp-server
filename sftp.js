@@ -107,7 +107,7 @@ var Handlers = {
       var count = filenames.length;
       var results = new Array(count);
       filenames.forEach(function (filename, i) {
-        Fs.stat(path + "/" + filename, function (err, stat) {
+        Fs.lstat(path + "/" + filename, function (err, stat) {
           if (err) { self.error(id, err); return; }
           results[i] = {
             filename: filename,
@@ -126,6 +126,17 @@ var Handlers = {
   CLOSE: function (id, handle) {
     delete handles[handle];
     this.status(id, FX_OK, "Success");
+  },
+  READLINK: function (id, path) {
+    var self = this;
+    Fs.readlink(path, function (err, resolvedPath) {
+      if (err) { self.error(err); return; }
+      self.send(FXP_NAME, id, [{
+        filename: resolvedPath,
+        longname: resolvedPath,
+        attrs: {}
+      }]);
+    });
   }
 };
 var handles = [];
