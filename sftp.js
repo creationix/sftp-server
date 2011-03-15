@@ -1,5 +1,4 @@
 var Net = require('net'),
-    ChildProcess = require('child_process'),
     Constants = require('constants'),
     Util = require('util'),
     Fs = require('fs'),
@@ -8,26 +7,9 @@ var Net = require('net'),
     encode = require('./encoder');
 eval(require('./constants'));
 
-// Proxy to real sftp server and trace conversation
-function proxy(client) {
-  var child = ChildProcess.spawn("/usr/lib/openssh/sftp-server", ["-e"]);
-  client.pipe(child.stdin);
-  child.stdout.pipe(client);
-  client.on('data', function (chunk) {
-//    console.log("IN  " + chunk.inspect());
-  });
-  child.stderr.pipe(process.stdout, { end: false });
-  createParser(client, function (type, args) {
-//    console.log("IN  " + FXP_LOOKUP[type] + " " + Util.inspect(args, false, 3));
-    console.log("IN  " + FXP_LOOKUP[type]);
-  });
-  child.stdout.on('data', function (chunk) {
-//    console.log("OUT " + chunk.inspect());
-  });
-  createParser(child.stdout, function (type, args) {
-//    console.log("OUT " + FXP_LOOKUP[type] + " " + Util.inspect(args, false, 3));
-    console.log("OUT " + FXP_LOOKUP[type]);
-  });
+// Monkey patch Buffer inspect to be less verbose and CPU intensive
+Buffer.prototype.inspect = function () {
+  return "<Buffer length=" + this.length + ">";
 }
 
 function real(client) {
@@ -38,13 +20,19 @@ function real(client) {
     send: function send(type) {
       var args = Array.prototype.slice.call(arguments, 1);
       var chunk = encode(type, args);
+      if (waiting !== args[0]) { 
+        console.log("WARNING: Dumping result with no active ID");
+        console.dir({type:type,args:args});
+        return;
+      }
       output.emit('data', chunk);
       if (queue.length) {
-        console.log("Grabbing next from queue out of %s", queue.length);
+//        console.log("Grabbing next from queue out of %s", queue.length);
         var next = queue.shift();
+        waiting = next.args[0];
         next.fn.apply(scope, next.args);
       } else {
-        console.log("Queue empty");
+//        console.log("Queue empty");
         waiting = false;
       }
     },
@@ -64,29 +52,31 @@ function real(client) {
   var output = new EventEmitter();
 
   client.on('data', function (chunk) {
-    console.log("IN  " + chunk.inspect());
+//    console.log("IN  " + chunk.inspect());
   });
   output.on('data', function (chunk) {
-    console.log("OUT " + chunk.inspect());
+//    console.log("OUT " + chunk.inspect());
     client.write(chunk);
   });
   createParser(output, function (type, args) {
     console.log("OUT " + FXP_LOOKUP[type] + " " + Util.inspect(args, false, 3));
+//    console.log("OUT " + FXP_LOOKUP[type]);
   });
   createParser(client, function (type, args) {
     console.log("IN  " + FXP_LOOKUP[type] + " " + Util.inspect(args, false, 3));
+//    console.log("IN  " + FXP_LOOKUP[type]);
     var typeName = FXP_LOOKUP[type];
     if (!Handlers.hasOwnProperty(typeName)) {
       throw new Error("Unknown type " + typeName);
     }
 
-    if (!waiting) {
-      waiting = true;
-      console.log("No Queue");
+    if (waiting === false) {
+      waiting = args[0];
+//      console.log("No Queue");
       Handlers[typeName].apply(scope, args);
     } else {
       queue.push({fn: Handlers[typeName], args: args});
-      console.log("Queueing, length %s", queue.length);
+//      console.log("Queueing, length %s", queue.length);
     }
   });
 }
@@ -131,7 +121,6 @@ var Handlers = {
     }
     var self = this;
     Fs.readdir(path, function (err, filenames) {
-      console.log("Found %s filenames", filenames.length);
       if (err) { self.error(id, err); return; }
       var count = filenames.length;
       if (count === 0) {
@@ -141,7 +130,6 @@ var Handlers = {
       var results = new Array(count);
       filenames.forEach(function (filename, i) {
         Fs.lstat(path + "/" + filename, function (err, stat) {
-          console.log("Stat for %s", i);
           if (err) { self.error(id, err); return; }
           results[i] = {
             filename: filename,
@@ -208,7 +196,7 @@ var Handlers = {
     }
     function onRead(err, bytesRead) {
       if (err) { self.error(id, err); return; }
-      if (bytesRead < len) {
+      if (bytesRead && bytesRead < len) {
         offset += bytesRead;
         pos += bytesRead;
         len -= bytesRead;
@@ -265,7 +253,7 @@ var Handlers = {
     }
     function onWrite(err, bytesWritten) {
       if (err) { self.error(id, err); return; }
-      if (bytesWritten < left) {
+      if (bytesWritten && bytesWritten < left) {
         pos += bytesWritten;
         offset += bytesWritten;
         left -= bytesWritten;
