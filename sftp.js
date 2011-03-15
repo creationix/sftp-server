@@ -246,6 +246,35 @@ var Handlers = {
       if (err) { self.error(id, err); return; }
       self.status(id, FX_OK, "Success");
     });
+  },
+  RENAME: function (id, oldPath, newPath) {
+    var self = this;
+    Fs.rename(oldPath, newPath, function (err) {
+      if (err) { self.error(id, err); return; }
+      self.status(id, FX_OK, "Success");
+    });
+  },
+  WRITE: function (id, handle, offset, data) {
+    if (!handles.hasOwnProperty(handle)) { throw new Error("Invalid Handle"); }
+    var self = this;
+    var fd = handles[handle];
+    var pos = 0;
+    var left = data.length;
+    writeChunk();
+    function writeChunk() {
+      console.dir([fd, data, offset, left, pos]);
+      Fs.write(fd, data, offset, left, pos, onWrite);
+    }
+    function onWrite(err, bytesWritten) {
+      if (err) { self.error(id, err); return; }
+      if (bytesWritten < left) {
+        pos += bytesWritten;
+        offset += bytesWritten;
+        left -= bytesWritten;
+        writeChunk();
+      }
+      self.status(id, FX_OK, "Success");
+    }
   }
 };
 

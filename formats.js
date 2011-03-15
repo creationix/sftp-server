@@ -4,7 +4,7 @@ module.exports = {
   OPEN: ["uint32", "string", "uint32", "ATTRS"],
   CLOSE: ["uint32", "string"],
   READ: ["uint32", "string", "uint64", "uint32"],
-  WRITE: ["uint32", "string", "uint64", "string"],
+  WRITE: ["uint32", "string", "uint64", "buffer"],
   LSTAT: ["uint32", "string"],
   FSTAT: ["uint32", "string"],
   SETSTAT: ["uint32", "string", "ATTRS"],
