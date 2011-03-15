@@ -29,27 +29,38 @@ function proxy(client) {
 }
 
 function real(client) {
+  var queue = [];
+  var waiting = false;
+
   var scope = {
     send: function send(type) {
       var args = Array.prototype.slice.call(arguments, 1);
       var chunk = encode(type, args);
       output.emit('data', chunk);
+      if (queue.length) {
+        console.log("Grabbing next from queue out of %s", queue.length);
+        var next = queue.shift();
+        next.fn.apply(scope, next.args);
+      } else {
+        console.log("Queue empty");
+        waiting = false;
+      }
     },
     status: function status(id, code, message) {
       scope.send(FXP_STATUS, id, code, message, "");
     },
     error: function error(id, err) {
-      var code;
+      var code, message = err.message;
       switch (err.code) {
-        case "ENOENT": code = FX_NO_SUCH_FILE; break; 
+        case "ENOENT": code = FX_NO_SUCH_FILE; message = "No such file"; break;
         case "EACCES": code = FX_PERMISSION_DENIED; break;
         default: code = FX_FAILURE;
       }
-      scope.send(FXP_STATUS, id, code, err.message, "");
+      scope.send(FXP_STATUS, id, code, message, "");
     }
   };
   var output = new EventEmitter();
-  
+
   client.on('data', function (chunk) {
     console.log("IN  " + chunk.inspect());
   });
@@ -63,12 +74,18 @@ function real(client) {
   createParser(client, function (type, args) {
     console.log("IN  " + FXP_LOOKUP[type] + " " + Util.inspect(args, false, 3));
     var typeName = FXP_LOOKUP[type];
-    if (Handlers.hasOwnProperty(typeName)) {
-      Handlers[typeName].apply(scope, args);
-    } else {
+    if (!Handlers.hasOwnProperty(typeName)) {
       throw new Error("Unknown type " + typeName);
     }
-    
+
+    if (!waiting) {
+      waiting = true;
+      console.log("No Queue");
+      Handlers[typeName].apply(scope, args);
+    } else {
+      queue.push({fn: Handlers[typeName], args: args});
+      console.log("Queueing, length %s", queue.length);
+    }
   });
 }
 
@@ -112,11 +129,17 @@ var Handlers = {
     }
     var self = this;
     Fs.readdir(path, function (err, filenames) {
+      console.log("Found %s filenames", filenames.length);
       if (err) { self.error(id, err); return; }
       var count = filenames.length;
+      if (count === 0) {
+        self.status(id, FX_EOF, "End of file");
+        return;
+      }
       var results = new Array(count);
       filenames.forEach(function (filename, i) {
         Fs.lstat(path + "/" + filename, function (err, stat) {
+          console.log("Stat for %s", i);
           if (err) { self.error(id, err); return; }
           results[i] = {
             filename: filename,
@@ -149,7 +172,7 @@ var Handlers = {
   },
   OPEN: function (id, path, pflags, attrs) {
     var self = this;
-    var flags = 
+    var flags =
       ((pflags & FXF_READ) ? Constants.O_RDONLY : 0) |
       ((pflags & FXF_WRITE) ? Constants.O_WRONLY : 0) |
       ((pflags & FXF_APPEND) ? Constants.O_APPEND : 0) |
@@ -209,6 +232,20 @@ var Handlers = {
   SETSTAT: function (id, path, attrs) {
     console.log("WARNING, node.js doesn't have SETSTAT");
     this.status(FX_OK, id, "Success");
+  },
+  MKDIR: function (id, path, attrs) {
+    var self = this;
+    Fs.mkdir(path, attrs.permissions, function (err) {
+      if (err) { self.error(id, err); return; }
+      self.status(id, FX_OK, "Success");
+    });
+  },
+  RMDIR: function (id, path) {
+    var self = this;
+    Fs.rmdir(path, function (err) {
+      if (err) { self.error(id, err); return; }
+      self.status(id, FX_OK, "Success");
+    });
   }
 };
 
@@ -225,7 +262,7 @@ function getHandle(path) {
 
 
 
-Net.createServer(proxy).listen(6000);
+Net.createServer(real).listen(6000);
 console.log("sftp-server listening on port 6000");
 
 
