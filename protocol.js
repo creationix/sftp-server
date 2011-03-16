@@ -1,5 +1,4 @@
-var Net = require('net'),
-    Util = require('sys'),
+var Util = require('sys'),
     Fs = require('fs'),
     EventEmitter = require('events').EventEmitter,
     createParser = require('./parser'),
@@ -14,7 +13,8 @@ Buffer.prototype.inspect = function () {
   return "<Buffer length=" + this.length + ">";
 }
 
-function real(client) {
+module.exports = Protocol;
+function Protocol(req, res) {
   var queue = [];
   var waiting = false;
 
@@ -23,18 +23,18 @@ function real(client) {
       var args = Array.prototype.slice.call(arguments, 1);
       var chunk = encode(type, args);
       if (waiting !== args[0]) { 
-        console.log("WARNING: Dumping result with no active ID");
+        console.error("WARNING: Dumping result with no active ID");
         console.dir({type:type,args:args});
         return;
       }
       output.emit('data', chunk);
       if (queue.length) {
-//        console.log("Grabbing next from queue out of %s", queue.length);
+//        console.error("Grabbing next from queue out of %s", queue.length);
         var next = queue.shift();
         waiting = next.args[0];
         next.fn.apply(scope, next.args);
       } else {
-//        console.log("Queue empty");
+//        console.error("Queue empty");
         waiting = false;
       }
     },
@@ -53,20 +53,20 @@ function real(client) {
   };
   var output = new EventEmitter();
 
-  client.on('data', function (chunk) {
-//    console.log("IN  " + chunk.inspect());
+  req.on('data', function (chunk) {
+//    console.error("IN  " + chunk.inspect());
   });
   output.on('data', function (chunk) {
-//    console.log("OUT " + chunk.inspect());
-    client.write(chunk);
+//    console.error("OUT " + chunk.inspect());
+    res.write(chunk);
   });
   createParser(output, function (type, args) {
-//    console.log("OUT " + FXP_LOOKUP[type] + " " + Util.inspect(args, false, 3));
-    console.log("OUT " + FXP_LOOKUP[type]);
+//    console.error("OUT " + FXP_LOOKUP[type] + " " + Util.inspect(args, false, 3));
+    console.error("OUT " + FXP_LOOKUP[type]);
   });
-  createParser(client, function (type, args) {
-//    console.log("IN  " + FXP_LOOKUP[type] + " " + Util.inspect(args, false, 3));
-    console.log("IN  " + FXP_LOOKUP[type]);
+  createParser(req, function (type, args) {
+//    console.error("IN  " + FXP_LOOKUP[type] + " " + Util.inspect(args, false, 3));
+    console.error("IN  " + FXP_LOOKUP[type]);
     var typeName = FXP_LOOKUP[type];
     if (!Handlers.hasOwnProperty(typeName)) {
       throw new Error("Unknown type " + typeName);
@@ -74,11 +74,11 @@ function real(client) {
 
     if (waiting === false) {
       waiting = args[0];
-//      console.log("No Queue");
+//      console.error("No Queue");
       Handlers[typeName].apply(scope, args);
     } else {
       queue.push({fn: Handlers[typeName], args: args});
-//      console.log("Queueing, length %s", queue.length);
+//      console.error("Queueing, length %s", queue.length);
     }
   });
 }
@@ -269,7 +269,6 @@ var Handlers = {
   }
 };
 
-
 var handles = [];
 function getHandle(path) {
   var i = 0;
@@ -280,9 +279,5 @@ function getHandle(path) {
   return i.toString();
 }
 
-
-
-Net.createServer(real).listen(6000);
-console.log("sftp-server listening on port 6000");
 
 
