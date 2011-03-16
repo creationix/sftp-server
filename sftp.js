@@ -1,11 +1,13 @@
 var Net = require('net'),
-    Constants = require('constants'),
-    Util = require('util'),
+    Util = require('sys'),
     Fs = require('fs'),
     EventEmitter = require('events').EventEmitter,
     createParser = require('./parser'),
     encode = require('./encoder');
 eval(require('./constants'));
+
+// Check for v0.2.x API
+var Constants = process.ENOENT ? process : require('constants');
 
 // Monkey patch Buffer inspect to be less verbose and CPU intensive
 Buffer.prototype.inspect = function () {

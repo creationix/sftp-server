@@ -1,6 +1,6 @@
 eval(require('./constants'));
 var Formats = require('./formats');
-var Util = require('util');
+var Util = require('sys');
 
 module.exports = encode;
 
