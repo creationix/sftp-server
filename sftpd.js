@@ -1,6 +1,9 @@
 #!/usr/bin/env node
+if (process.versions.node < "0.4.0") {
+  require.paths.unshift(__dirname + "/node_modules");
+}
 var Net = require('net'),
-    Protocol = require('./protocol');
+    Protocol = require('protocol');
 
 Net.createServer(function (client) {
   Protocol(client, client);
